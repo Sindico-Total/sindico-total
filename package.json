@@ -1,0 +1,11 @@
+{
+  "name": "sindico-total",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Síndico Total — app de gestão condominial + garantidora (MVP gratuito: GitHub Pages + Supabase)",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev": "npx --yes serve ."
+  }
+}

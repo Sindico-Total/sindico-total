@@ -161,3 +161,12 @@ textarea { resize: vertical; }
   .card { border: 0; padding: 0; }
   body { background: #fff; }
 }
+
+/* botão "Instalar o app" */
+.btn.instalar.destaque { width:100%; margin:.2rem 0 .4rem; background:color-mix(in srgb, var(--acento) 22%, #fff); border-color:var(--acento); color:var(--primaria); }
+.btn.instalar.destaque:hover { background:color-mix(in srgb, var(--acento) 35%, #fff); }
+.menu-inst { display:flex; gap:.6rem; align-items:center; width:100%; padding:.55rem .7rem; border-radius:8px; border:1px dashed rgba(255,255,255,.35); background:none; color:#fff; font:inherit; font-weight:600; cursor:pointer; margin:.2rem 0; }
+.menu-inst:hover { background:rgba(255,255,255,.08); }
+.passos { padding-left:1.2rem; line-height:1.6; } .passos li { margin-bottom:.4rem; }
+.ico-share { display:inline-block; border:1.5px solid currentColor; border-radius:4px; padding:0 4px; font-size:.85em; }
+[hidden] { display:none !important; }

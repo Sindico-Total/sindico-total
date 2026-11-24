@@ -5,6 +5,7 @@ import { telaLogin, telaNovaSenha, telaConfig } from './views/auth.js';
 import * as morador from './views/morador.js';
 import * as gestao from './views/gestao.js';
 import * as admin from './views/admin.js';
+import { botaoInstalar } from './install.js';
 
 // Estado global simples
 export const state = {
@@ -113,6 +114,7 @@ function montarLayout() {
         ${menuAdmin}
         <div class="menu-grupo">
           ${link('perfil', state.perfil?.nome_completo?.split(' ')[0] || 'Perfil', '👤')}
+          <div id="menu-instalar"></div>
           <a href="#" id="btn-sair"><span class="ico">🚪</span><span>Sair</span></a>
         </div>
       </aside>
@@ -125,6 +127,7 @@ function montarLayout() {
       </div>
     </div>`;
 
+  document.getElementById('menu-instalar').append(botaoInstalar('menu-inst'));
   document.getElementById('btn-menu').onclick = () => document.body.classList.toggle('menu-aberto');
   document.getElementById('menu').addEventListener('click', (e) => {
     if (e.target.closest('a')) document.body.classList.remove('menu-aberto');

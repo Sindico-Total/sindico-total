@@ -1,6 +1,7 @@
 import { sb } from '../supabase.js';
 import { NOME_APP } from '../config.js';
 import { esc, toast, traduzErro, dadosForm, soDigitos } from '../ui.js';
+import { botaoInstalar } from '../install.js';
 
 const urlRetorno = () => location.origin + location.pathname;
 
@@ -23,6 +24,7 @@ export function telaLogin(app, aba = 'entrar') {
       <div class="card login">
         <div class="marca grande"><img src="icons/icon.svg" alt=""><b>${esc(NOME_APP)}</b></div>
         <p class="sub">Síndico, administração e garantia em um só lugar.</p>
+        <div id="area-instalar"></div>
         <div class="abas">
           <button data-aba="entrar">Entrar</button>
           <button data-aba="criar">Criar conta</button>
@@ -46,6 +48,8 @@ export function telaLogin(app, aba = 'entrar') {
         </form>
       </div>
     </div>`;
+
+  app.querySelector('#area-instalar').append(botaoInstalar('btn instalar destaque'));
 
   const trocar = (a) => {
     app.querySelectorAll('.abas button').forEach((b) => b.classList.toggle('ativo', b.dataset.aba === a));

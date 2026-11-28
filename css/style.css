@@ -126,6 +126,7 @@ textarea { resize: vertical; }
 .borda { border-top: 1px solid var(--borda); margin-top: 1rem; padding-top: 1rem; }
 .lista { padding-left: 1.1rem; margin: .3rem 0 .6rem; } .lista li { margin-bottom: .3rem; }
 
+.tabela-rolagem { overflow-x: auto; }
 .tabela { width: 100%; border-collapse: collapse; font-size: .92rem; margin-bottom: .8rem; }
 .tabela th, .tabela td { text-align: left; padding: .55rem .5rem; border-bottom: 1px solid var(--borda); vertical-align: top; }
 .tabela thead th { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: var(--suave); }

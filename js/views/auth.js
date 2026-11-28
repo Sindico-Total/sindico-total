@@ -1,6 +1,6 @@
 import { sb } from '../supabase.js';
 import { NOME_APP } from '../config.js';
-import { esc, toast, traduzErro, dadosForm, soDigitos } from '../ui.js';
+import { esc, toast, traduzErro, dadosForm } from '../ui.js';
 import { botaoInstalar } from '../install.js';
 
 const urlRetorno = () => location.origin + location.pathname;
@@ -23,100 +23,145 @@ export function telaLogin(app, aba = 'entrar') {
     <div class="centro">
       <div class="card login">
         <div class="marca grande"><img src="icons/icon.svg" alt=""><b>${esc(NOME_APP)}</b></div>
-        <p class="sub">Síndico, administração e garantia em um só lugar.</p>
         <div id="area-instalar"></div>
-        <div class="abas">
-          <button data-aba="entrar">Entrar</button>
-          <button data-aba="criar">Criar conta</button>
+        <div class="abas" aria-label="Acesso ao portal">
+          <button type="button" data-aba="entrar">Entrar</button>
+          <button type="button" data-aba="solicitar">Solicitar acesso</button>
         </div>
 
-        <form id="f-entrar" class="aba" data-aba="entrar">
+        <form id="f-entrar" class="aba" data-painel="entrar">
           <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
           <label>Senha<input name="senha" type="password" required autocomplete="current-password"></label>
           <button class="btn primario" type="submit">Entrar</button>
           <button class="btn link" type="button" id="esqueci">Esqueci minha senha</button>
         </form>
 
-        <form id="f-criar" class="aba" data-aba="criar">
-          <label>Nome completo<input name="nome" required></label>
-          <label>CPF<input name="cpf" inputmode="numeric" required placeholder="000.000.000-00"></label>
-          <label>WhatsApp<input name="fone" inputmode="tel" placeholder="(11) 99999-9999"></label>
-          <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
-          <label>Senha<input name="senha" type="password" required minlength="6" autocomplete="new-password"></label>
-          <label class="check"><input type="checkbox" required> Li e aceito o uso dos meus dados para a gestão do condomínio (LGPD).</label>
-          <button class="btn primario" type="submit">Criar conta</button>
+        <form id="f-recuperar" class="aba" data-painel="recuperar">
+          <h2>Redefinir senha</h2>
+          <label>E-mail da conta<input name="email" type="email" maxlength="254" required autocomplete="email"></label>
+          <button class="btn primario" type="submit">Enviar link de redefinição</button>
+          <p class="mini" role="status"></p>
+        </form>
+
+        <form id="f-solicitar" class="aba" data-painel="solicitar">
+          <h2>Solicitar acesso</h2>
+          <label>Nome completo<input name="nome" minlength="2" maxlength="120" required autocomplete="name"></label>
+          <label>E-mail<input name="email" type="email" maxlength="254" required autocomplete="email"></label>
+          <label>Condomínio e unidade (opcional)<input name="referencia" maxlength="160"></label>
+          <button class="btn primario" type="submit">Enviar solicitação</button>
+          <p class="mini" role="status"></p>
         </form>
       </div>
     </div>`;
 
   app.querySelector('#area-instalar').append(botaoInstalar('btn instalar destaque'));
-
+  const abas = app.querySelector('.abas');
   const trocar = (a) => {
-    app.querySelectorAll('.abas button').forEach((b) => b.classList.toggle('ativo', b.dataset.aba === a));
-    app.querySelectorAll('form.aba').forEach((f) => (f.hidden = f.dataset.aba !== a));
+    abas.querySelectorAll('button').forEach((b) => {
+      const ativa = b.dataset.aba === a;
+      b.classList.toggle('ativo', ativa);
+      b.setAttribute('aria-pressed', String(ativa));
+    });
+    app.querySelectorAll('form.aba').forEach((f) => (f.hidden = f.dataset.painel !== a));
   };
-  app.querySelectorAll('.abas button').forEach((b) => (b.onclick = () => trocar(b.dataset.aba)));
+  abas.querySelectorAll('button').forEach((b) => (b.onclick = () => trocar(b.dataset.aba)));
   trocar(aba);
 
-  const ocupado = (form, sim) => form.querySelectorAll('button').forEach((b) => (b.disabled = sim));
-
-  app.querySelector('#f-entrar').onsubmit = async (e) => {
-    e.preventDefault();
-    const f = dadosForm(e.target);
-    ocupado(e.target, true);
-    const { error } = await sb.auth.signInWithPassword({ email: f.email.trim(), password: f.senha });
-    ocupado(e.target, false);
-    if (error) toast(traduzErro(error.message), 'erro');
+  const entrar = app.querySelector('#f-entrar');
+  const recuperar = app.querySelector('#f-recuperar');
+  entrar.querySelector('#esqueci').onclick = () => {
+    if (!recuperar.elements.email.value) recuperar.elements.email.value = entrar.elements.email.value;
+    trocar('recuperar');
+    recuperar.elements.email.focus();
   };
 
-  app.querySelector('#esqueci').onclick = async () => {
-    const email = app.querySelector('#f-entrar [name=email]').value.trim();
-    if (!email) return toast('Digite seu e-mail no campo acima.', 'erro');
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: urlRetorno() });
-    if (error) return toast(traduzErro(error.message), 'erro');
-    toast('Enviamos um link para redefinir a senha no seu e-mail.');
+  entrar.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = dadosForm(entrar);
+    const botao = e.submitter;
+    botao.disabled = true;
+    try {
+      const { error } = await sb.auth.signInWithPassword({ email: f.email.trim(), password: f.senha });
+      if (error) toast(traduzErro(error.message), 'erro');
+    } catch {
+      toast('Não foi possível entrar agora. Tente novamente.', 'erro');
+    } finally {
+      botao.disabled = false;
+    }
   };
 
-  app.querySelector('#f-criar').onsubmit = async (e) => {
+  recuperar.onsubmit = async (e) => {
     e.preventDefault();
-    const f = dadosForm(e.target);
-    const cpf = soDigitos(f.cpf);
-    if (cpf.length !== 11 && cpf.length !== 14) return toast('CPF/CNPJ inválido.', 'erro');
-    ocupado(e.target, true);
-    const { data, error } = await sb.auth.signUp({
-      email: f.email.trim(),
-      password: f.senha,
-      options: {
-        emailRedirectTo: urlRetorno(),
-        data: { nome_completo: f.nome.trim(), cpf_cnpj: cpf, telefone_whatsapp: soDigitos(f.fone) },
-      },
-    });
-    ocupado(e.target, false);
-    if (error) return toast(traduzErro(error.message), 'erro');
-    if (!data.session) {
-      app.querySelector('.login').innerHTML = `
-        <h2>📧 Confirme seu e-mail</h2>
-        <p>Enviamos um link de confirmação para <b>${esc(f.email)}</b>. Abra-o neste aparelho para entrar.</p>
-        <button class="btn" id="voltar-login">Voltar</button>`;
-      app.querySelector('#voltar-login').onclick = () => telaLogin(app);
+    const botao = e.submitter;
+    const status = recuperar.querySelector('[role=status]');
+    botao.disabled = true;
+    status.textContent = '';
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(recuperar.elements.email.value.trim(), {
+        redirectTo: urlRetorno(),
+      });
+      if (error && (error.name === 'AuthRetryableFetchError')) throw error;
+      status.textContent = 'Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha.';
+    } catch {
+      status.textContent = 'O envio está indisponível agora. Tente novamente em alguns minutos.';
+    } finally {
+      botao.disabled = false;
+    }
+  };
+
+  const solicitar = app.querySelector('#f-solicitar');
+  solicitar.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = dadosForm(solicitar);
+    const botao = e.submitter;
+    const status = solicitar.querySelector('[role=status]');
+    botao.disabled = true;
+    status.textContent = '';
+    try {
+      const { error } = await sb.rpc('solicitar_acesso', {
+        p_nome: f.nome.trim(), p_email: f.email.trim(), p_referencia: f.referencia.trim() || null,
+      });
+      if (error) throw error;
+      solicitar.reset();
+      status.textContent = 'Solicitação recebida. Se o acesso for aprovado, você receberá o convite por e-mail.';
+    } catch (error) {
+      status.textContent = error.code === '22023'
+        ? 'Confira o nome e o e-mail informados.'
+        : 'Não foi possível enviar a solicitação. Tente novamente.';
+    } finally {
+      botao.disabled = false;
     }
   };
 }
 
-export function telaNovaSenha(app) {
+export function telaNovaSenha(app, tipo, voltar) {
   app.innerHTML = `
     <div class="centro"><div class="card login">
-      <h2>Definir nova senha</h2>
+      <h2>${tipo === 'invite' ? 'Crie sua senha' : 'Redefina sua senha'}</h2>
       <form id="f-nova">
-        <label>Nova senha<input name="senha" type="password" minlength="6" required autocomplete="new-password"></label>
-        <button class="btn primario">Salvar</button>
+        <label>Nova senha<input name="senha" type="password" minlength="8" required autocomplete="new-password"></label>
+        <label>Confirme a nova senha<input name="confirmacao" type="password" minlength="8" required autocomplete="new-password"></label>
+        <p class="mini">Use pelo menos 8 caracteres.</p>
+        <button class="btn primario">Salvar senha</button>
+        <button class="btn link" id="voltar-entrar" type="button">Voltar para entrar</button>
       </form>
     </div></div>`;
-  app.querySelector('#f-nova').onsubmit = async (e) => {
+  const form = app.querySelector('#f-nova');
+  form.querySelector('#voltar-entrar').onclick = () => voltar(false);
+  form.onsubmit = async (e) => {
     e.preventDefault();
-    const { error } = await sb.auth.updateUser({ password: dadosForm(e.target).senha });
-    if (error) return toast(traduzErro(error.message), 'erro');
-    toast('Senha alterada!');
-    setTimeout(() => (location.href = urlRetorno()), 800);
+    const { senha, confirmacao } = dadosForm(form);
+    if (senha !== confirmacao) return toast('As senhas precisam ser iguais.', 'erro');
+    const botao = e.submitter;
+    botao.disabled = true;
+    try {
+      const { error } = await sb.auth.updateUser({ password: senha });
+      if (error) return toast(traduzErro(error.message), 'erro');
+      await voltar(true);
+    } catch {
+      toast('Não foi possível salvar a senha. Tente novamente.', 'erro');
+    } finally {
+      botao.disabled = false;
+    }
   };
 }

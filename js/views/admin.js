@@ -1,6 +1,6 @@
 import { sb } from '../supabase.js';
 import { state, recarregar } from '../app.js';
-import { esc, brl, data, badge, q, toast, modal, dadosForm, vazio, soDigitos, numBR, rotulo, baixarCSV } from '../ui.js';
+import { esc, brl, data, dataHora, badge, q, toast, modal, dadosForm, vazio, soDigitos, numBR, rotulo, baixarCSV } from '../ui.js';
 
 // ================================================================ CARTEIRA DE GARANTIA (cessões)
 export async function carteira(root) {
@@ -142,33 +142,122 @@ export async function condominios(root) {
   };
 }
 
-// ================================================================ USUÁRIOS
+// ================================================================ CONTAS
 export async function usuarios(root) {
   const busca = root.dataset.busca || '';
-  let consulta = sb.from('pessoas').select('*').order('criado_em', { ascending: false }).limit(200);
+  const situacao = root.dataset.situacao || 'PENDENTE';
+  let consulta = sb.from('pessoas').select('id,nome_completo,email,telefone_whatsapp,tipo_usuario')
+    .order('criado_em', { ascending: false }).limit(200);
   if (busca) consulta = consulta.or(`nome_completo.ilike.%${busca}%,email.ilike.%${busca}%`);
-  const lista = await q(consulta);
+  const [lista, pedidos, principal] = await Promise.all([
+    q(consulta),
+    q(sb.from('pedidos_acesso').select('id,nome,email,referencia,status,solicitado_em,decidido_em,convite_enviado_em')
+      .eq('status', situacao).order('solicitado_em', { ascending: false }).limit(100)),
+    q(sb.rpc('eh_admin_principal')),
+  ]);
 
+  const perfis = ['MORADOR', 'SINDICO_PROFISSIONAL', 'ADMINISTRADOR'];
+  const situacoes = { PENDENTE: 'Pendentes', APROVADO: 'Aprovadas', RECUSADO: 'Recusadas' };
   root.innerHTML = `
-    <div class="card filtros"><label>Buscar<input id="busca" value="${esc(busca)}" placeholder="nome ou e-mail"></label></div>
-    <div class="card"><table class="tabela">
-      <thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Perfil</th></tr></thead>
-      <tbody>${lista.map((p) => `<tr><td>${esc(p.nome_completo)}</td><td>${esc(p.email)}</td><td>${esc(p.telefone_whatsapp || '')}</td>
-        <td><select data-p="${p.id}" ${p.id === state.user.id ? 'disabled' : ''}>${['MORADOR', 'SINDICO_PROFISSIONAL', 'ADMINISTRADOR']
-          .map((k) => `<option value="${k}" ${k === p.tipo_usuario ? 'selected' : ''}>${rotulo(k)}</option>`).join('')}</select></td></tr>`).join('')}
-      </tbody></table>
-      <p class="mini">Novas contas entram como "Morador". Para alguém virar síndico: mude aqui para "Síndico profissional" e
-        vincule-o ao condomínio em <a href="#/admin/condominios">Condomínios</a>.</p></div>`;
+    <section class="card">
+      <h2>Solicitações de acesso</h2>
+      <label>Situação<select id="situacao">${Object.entries(situacoes).map(([key, label]) =>
+        `<option value="${key}" ${key === situacao ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+      ${pedidos.length ? `<div class="tabela-rolagem"><table class="tabela">
+        <thead><tr><th>Solicitante</th><th>Condomínio e unidade</th><th>Solicitado em</th><th>Ações</th></tr></thead>
+        <tbody>${pedidos.map((p) => `<tr>
+          <td>${esc(p.nome)}<br><small>${esc(p.email)}</small></td>
+          <td>${esc(p.referencia || '—')}</td><td>${dataHora(p.solicitado_em)}</td>
+          <td class="acoes-linha">${p.status === 'PENDENTE'
+            ? `<button class="btn primario mini-btn" data-aprovar="${p.id}">Aprovar e enviar convite</button>
+               <button class="btn mini-btn" data-recusar="${p.id}">Recusar</button>`
+            : p.status === 'APROVADO'
+              ? `<small>Enviado em ${dataHora(p.convite_enviado_em)}</small>
+                 <button class="btn mini-btn" data-aprovar="${p.id}">Reenviar convite</button>`
+              : `<small>Recusado em ${dataHora(p.decidido_em)}</small>`}</td>
+        </tr>`).join('')}</tbody></table></div>` : vazio('Nenhuma solicitação nesta situação.')}
+    </section>
 
-  const inp = root.querySelector('#busca');
-  inp.onchange = () => { root.dataset.busca = inp.value.replace(/[,%()]/g, '').trim(); usuarios(root); };
+    <section class="card">
+      <h2>Contas cadastradas</h2>
+      <label>Buscar<input id="busca" value="${esc(busca)}" placeholder="nome ou e-mail"></label>
+      ${lista.length ? `<div class="tabela-rolagem"><table class="tabela">
+        <thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Perfil</th>${principal ? '<th>Ações</th>' : ''}</tr></thead>
+        <tbody>${lista.map((p) => {
+          const propriaConta = p.id === state.user.id;
+          const podeEditar = !propriaConta && (principal || p.tipo_usuario !== 'ADMINISTRADOR');
+          return `<tr><td>${esc(p.nome_completo)}${propriaConta ? ' <small>(você)</small>' : ''}</td>
+            <td>${esc(p.email)}</td><td>${esc(p.telefone_whatsapp || '—')}</td>
+            <td>${podeEditar ? `<select data-p="${p.id}" aria-label="Perfil de ${esc(p.nome_completo)}">${perfis
+              .filter((k) => principal || k !== 'ADMINISTRADOR')
+              .map((k) => `<option value="${k}" ${k === p.tipo_usuario ? 'selected' : ''}>${rotulo(k)}</option>`).join('')}</select>`
+              : esc(rotulo(p.tipo_usuario))}</td>
+            ${principal ? `<td>${propriaConta ? '—' : `<button class="btn mini-btn perigo" data-excluir="${p.id}">Excluir conta</button>`}</td>` : ''}</tr>`;
+        }).join('')}</tbody></table></div>` : vazio('Nenhuma conta encontrada.')}
+      <p class="mini">Novas contas começam como morador. Para habilitar um síndico, altere o perfil e vincule a conta em
+        <a href="#/admin/condominios">Condomínios</a>.</p>
+    </section>`;
+
+  const atualizar = () => usuarios(root).catch(() => {});
+  root.querySelector('#situacao').onchange = (e) => {
+    root.dataset.situacao = e.target.value;
+    atualizar();
+  };
+  root.querySelector('#busca').onchange = (e) => {
+    root.dataset.busca = e.target.value.replace(/[,%()]/g, '').trim();
+    atualizar();
+  };
+
   root.querySelectorAll('select[data-p]').forEach((s) => {
     s.onchange = async () => {
-      if (s.value === 'ADMINISTRADOR' && !confirm('Administrador tem acesso TOTAL a todos os condomínios e à carteira. Confirmar?')) {
-        return usuarios(root);
+      const conta = lista.find((p) => p.id === s.dataset.p);
+      if (s.value === 'ADMINISTRADOR' && !confirm('Administradores têm acesso a todos os condomínios. Alterar o perfil?')) {
+        s.value = conta.tipo_usuario;
+        return;
       }
-      await q(sb.from('pessoas').update({ tipo_usuario: s.value }).eq('id', s.dataset.p));
-      toast('Perfil alterado.');
+      s.disabled = true;
+      try {
+        await q(sb.from('pessoas').update({ tipo_usuario: s.value }).eq('id', conta.id));
+        toast('Perfil alterado.');
+        await atualizar();
+      } catch {
+        s.value = conta.tipo_usuario;
+      } finally {
+        s.disabled = false;
+      }
     };
   });
+
+  root.onclick = async (e) => {
+    const botao = e.target.closest('button[data-aprovar], button[data-recusar], button[data-excluir]');
+    if (!botao) return;
+    const { aprovar, recusar, excluir } = botao.dataset;
+    const conta = excluir && lista.find((p) => p.id === excluir);
+    const pedido = !excluir && pedidos.find((p) => p.id === (aprovar || recusar));
+    if (conta && !confirm(`Excluir definitivamente a conta de ${conta.nome_completo} (${conta.email})? A pessoa perderá o acesso e os registros operacionais serão preservados.`)) return;
+    if (recusar && !confirm(`Recusar a solicitação de ${pedido.email}?`)) return;
+    botao.disabled = true;
+    try {
+      if (excluir) {
+        await q(sb.rpc('excluir_conta', { p_pessoa: excluir }));
+        toast('Conta excluída.');
+      } else if (recusar) {
+        const recusado = await q(sb.rpc('recusar_pedido_acesso', { p_pedido: recusar }));
+        toast(recusado ? 'Solicitação recusada.' : 'A solicitação já está sendo processada.', recusado ? 'ok' : 'alerta');
+      } else {
+        const { data: retorno, error } = await sb.functions.invoke('aprovar-acesso', { body: { pedido: aprovar } });
+        if (error) {
+          const detalhe = await error.context?.json?.().catch(() => null);
+          toast(detalhe?.mensagem || 'Não foi possível enviar o convite.', 'erro');
+        } else {
+          toast(retorno.mensagem);
+        }
+      }
+      await atualizar();
+    } catch {
+      // O banco já mostra uma mensagem de erro pelo q().
+    } finally {
+      botao.disabled = false;
+    }
+  };
 }

@@ -423,7 +423,7 @@ export async function solicitacoes(root) {
     ${lista.length ? lista.map((s) => `
       <form class="card item" data-id="${s.id}">
         <div class="linha"><b>${esc(s.titulo)}</b>${badge(s.status)}</div>
-        <small>${esc(s.pessoas?.nome_completo)} · ${esc(s.unidades?.identificacao || '')} · ${esc(s.categoria)} · ${dataHora(s.criado_em)}
+        <small>${esc(s.pessoas?.nome_completo || 'Conta excluída')} · ${esc(s.unidades?.identificacao || '')} · ${esc(s.categoria)} · ${dataHora(s.criado_em)}
           ${s.origem === 'WHATSAPP' ? ' · via WhatsApp' : ''}</small>
         ${s.descricao ? `<p>${esc(s.descricao)}</p>` : ''}
         <div class="grade2">

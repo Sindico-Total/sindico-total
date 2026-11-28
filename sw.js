@@ -1,10 +1,10 @@
 // Service worker: permite instalar o app no celular e abrir a "casca" offline.
 // Estratégia "rede primeiro": sempre busca a versão nova; usa o cache só sem internet.
-const CACHE = 'sindico-total-v5';
+const CACHE = 'sindico-total-v6';
 const CASCA = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/install.js', 'js/config.js', 'js/supabase.js', 'js/ui.js', 'js/pix.js',
-  'js/views/auth.js', 'js/views/comum.js', 'js/views/morador.js', 'js/views/gestao.js', 'js/views/admin.js',
+  'js/views/auth.js', 'js/views/comum.js', 'js/views/morador.js', 'js/views/gestao.js', 'js/views/admin.js', 'js/views/modulos.js',
 ];
 
 self.addEventListener('install', (e) => {

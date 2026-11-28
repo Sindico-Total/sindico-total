@@ -5,6 +5,7 @@ import { telaLogin, telaNovaSenha, telaConfig } from './views/auth.js';
 import * as morador from './views/morador.js';
 import * as gestao from './views/gestao.js';
 import * as admin from './views/admin.js';
+import * as modulos from './views/modulos.js';
 import { botaoInstalar } from './install.js';
 
 // Estado global simples
@@ -13,6 +14,7 @@ export const state = {
   perfil: null,        // linha da tabela pessoas
   unidades: [],        // vínculos do usuário: [{tipo_vinculo, unidades:{..., condominios:{...}}}]
   gerenciados: [],     // condomínios que o usuário administra
+  modulos: [],
   condId: null,        // condomínio selecionado na área de gestão
 };
 
@@ -21,6 +23,8 @@ export const ehGestor = () => ehAdmin() || state.gerenciados.length > 0 || state
 export const condAtual = () => state.gerenciados.find((c) => c.id === state.condId) || null;
 
 const ROTAS = {
+  'admin/modulos': { tela: modulos.configuracao, titulo: 'Gestão de módulos', admin: true },
+  ...Object.fromEntries(Object.entries(modulos.catalogo).flatMap(([m,t])=>[[m,{tela:modulos.tela(m),titulo:t}],[`gestao/${m}`,{tela:modulos.tela(m,true),titulo:t,gestor:true}]])),
   inicio:              { tela: morador.inicio,          titulo: 'Minhas faturas' },
   solicitacoes:        { tela: morador.solicitacoes,    titulo: 'Solicitações' },
   agenda:              { tela: morador.agenda,          titulo: 'Agenda do condomínio' },
@@ -62,7 +66,10 @@ export async function carregarContexto() {
   if (state.user !== usuario) return false;
   const salvo = ler('st_cond');
   const condId = gerenciados.some((c) => c.id === salvo) ? salvo : gerenciados[0]?.id || null;
-  Object.assign(state, { perfil, unidades, gerenciados, condId });
+  const ids=[...new Set([...gerenciados.map(c=>c.id),...unidades.map(v=>v.unidades?.condominio_id).filter(Boolean)])];
+  const listaModulos=ids.length?await q(sb.from('condominio_modulos').select('condominio_id,modulo,habilitado').in('condominio_id',ids)):[];
+  if(state.user!==usuario)return false;
+  Object.assign(state, { perfil, unidades, gerenciados, condId, modulos:listaModulos });
   return true;
 }
 
@@ -77,6 +84,7 @@ function link(rota, txt, icone) {
 }
 
 function montarLayout() {
+  const linksModulos=(gestor)=>Object.entries(modulos.catalogo).filter(([m])=>state.modulos.some(r=>r.modulo===m&&r.habilitado&&(gestor?r.condominio_id===state.condId:state.unidades.some(v=>v.unidades?.condominio_id===r.condominio_id)))).map(([m,t])=>link(gestor?'gestao/'+m:m,t,'📌')).join('');
   const temUnidade = state.unidades.length > 0;
   const menuMorador = `
     <div class="menu-grupo"><small>Minha unidade</small>
@@ -84,6 +92,7 @@ function montarLayout() {
       ${link('solicitacoes', 'Solicitações', '📝')}
       ${link('agenda', 'Agenda', '📅')}
       ${link('contas', 'Prestação de contas', '📊')}
+      ${linksModulos(false)}
     </div>`;
   const seletor = state.gerenciados.length
     ? `<select id="sel-cond" aria-label="Condomínio">${state.gerenciados
@@ -101,6 +110,7 @@ function montarLayout() {
         ${link('gestao/solicitacoes', 'Diligências', '🛠️')}
         ${link('gestao/vistorias', 'Vistorias', '🔍')}
         ${link('gestao/condominio', 'Dados do condomínio', '⚙️')}
+        ${linksModulos(true)}
       </div>`
     : '';
   const menuAdmin = ehAdmin()
@@ -108,6 +118,7 @@ function montarLayout() {
         ${link('admin/carteira', 'Carteira de garantia', '🏦')}
         ${link('admin/condominios', 'Condomínios', '🏢')}
         ${link('admin/usuarios', 'Contas', '👥')}
+        ${link('admin/modulos', 'Gestão de módulos', '🧩')}
       </div>`
     : '';
 
@@ -150,7 +161,9 @@ function montarLayout() {
     sel.onchange = () => {
       state.condId = sel.value;
       guardar('st_cond', sel.value);
-      if (!location.hash.startsWith('#/gestao')) location.hash = '#/gestao/painel';
+      montarLayout();
+      if (location.hash === '#/admin/modulos') rotear();
+      else if (!location.hash.startsWith('#/gestao')) location.hash = '#/gestao/painel';
       else rotear();
     };
   }
@@ -304,7 +317,7 @@ async function iniciar() {
     if (evento === 'SIGNED_OUT') {
       fluxoSenha = null;
       ultimoUsuario = null;
-      Object.assign(state, { user: null, perfil: null, unidades: [], gerenciados: [], condId: null });
+      Object.assign(state, { user: null, perfil: null, unidades: [], gerenciados: [], modulos: [], condId: null });
       document.querySelectorAll('.modal-fundo, #toasts').forEach((elemento) => elemento.remove());
       document.body.classList.remove('menu-aberto');
       document.title = NOME_APP;

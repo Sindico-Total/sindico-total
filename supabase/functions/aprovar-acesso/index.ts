@@ -36,7 +36,9 @@ Deno.serve(async (req) => {
     return responder(400, 'Solicitação inválida.');
   }
   const { data: envio, error: reserva } = await usuario
-    .rpc('reservar_convite_acesso', { p_pedido: corpo.pedido }).maybeSingle();
+    .rpc('reservar_convite_acesso', { p_pedido: corpo.pedido })
+    .maybeSingle()
+    .overrideTypes<{ id_envio: string; email: string; nome: string }, { merge: false }>();
   if (reserva) return responder(reserva.code === '42501' ? 403 : 500, 'Não foi possível autorizar a solicitação.');
   if (!envio) return responder(409, 'Já existe uma conta, o convite está sendo processado ou o pedido foi decidido. Atualize a lista.');
 

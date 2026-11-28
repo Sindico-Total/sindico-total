@@ -97,7 +97,8 @@ export function telaLogin(app, aba = 'entrar') {
       app.querySelector('.login').innerHTML = `
         <h2>📧 Confirme seu e-mail</h2>
         <p>Enviamos um link de confirmação para <b>${esc(f.email)}</b>. Abra-o neste aparelho para entrar.</p>
-        <button class="btn" onclick="location.reload()">Voltar</button>`;
+        <button class="btn" id="voltar-login">Voltar</button>`;
+      app.querySelector('#voltar-login').onclick = () => telaLogin(app);
     }
   };
 }

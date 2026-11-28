@@ -37,7 +37,7 @@ const STATUS_COR = {
   ATRASADO: 'erro', ACAO_JUDICIAL: 'erro', CANCELADA: 'neutro', CANCELADO: 'neutro', CEDIDO: 'roxo',
 };
 export const rotulo = (s) => String(s || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
-export const badge = (s) => `<span class="badge ${STATUS_COR[s] || 'neutro'}">${esc(rotulo(s))}</span>`;
+export const badge = (s) => `<span class="badge ${(Object.hasOwn(STATUS_COR, s) && STATUS_COR[s]) || 'neutro'}">${esc(rotulo(s))}</span>`;
 
 export function toast(msg, tipo = 'ok') {
   let box = document.getElementById('toasts');
@@ -99,9 +99,14 @@ export async function q(promessa) {
 }
 
 export function baixarCSV(nome, linhas) {
-  const csv = linhas
-    .map((l) => l.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';'))
-    .join('\r\n');
+  const csv = linhas.map((linha) => linha.map((celula) => {
+    let texto = String(celula ?? '');
+    // Planilhas podem interpretar texto exportado como fórmula, mesmo entre aspas.
+    if (typeof celula !== 'number' && (/^[\t\r\n]/u.test(texto) || /^\s*[=+\-@＝＋－＠]/u.test(texto))) {
+      texto = "'" + texto;
+    }
+    return '"' + texto.replace(/"/g, '""') + '"';
+  }).join(';')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

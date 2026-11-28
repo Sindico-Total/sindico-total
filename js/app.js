@@ -42,22 +42,28 @@ const ROTAS = {
 const app = document.getElementById('app');
 
 export async function carregarContexto() {
-  const uid = state.user.id;
-  state.perfil = await q(sb.from('pessoas').select('*').eq('id', uid).maybeSingle());
-  state.unidades = await q(
-    sb.from('vinculos_unidade')
+  const usuario = state.user;
+  if (!usuario) return false;
+  const uid = usuario.id;
+  const [perfil, unidades] = await Promise.all([
+    q(sb.from('pessoas').select('*').eq('id', uid).maybeSingle()),
+    q(sb.from('vinculos_unidade')
       .select('id, tipo_vinculo, unidades(id, identificacao, valor_taxa_condominio, condominio_id, condominios(*))')
-      .eq('pessoa_id', uid).eq('ativo', true)
-  );
-  if (ehAdmin()) {
-    state.gerenciados = await q(sb.from('condominios').select('*').order('nome_fantasia'));
+      .eq('pessoa_id', uid).eq('ativo', true)),
+  ]);
+  let gerenciados;
+  if (perfil?.tipo_usuario === 'ADMINISTRADOR') {
+    gerenciados = await q(sb.from('condominios').select('*').order('nome_fantasia'));
   } else {
     const g = await q(sb.from('condominio_gestores').select('condominios(*)').eq('pessoa_id', uid));
-    state.gerenciados = g.map((x) => x.condominios).filter(Boolean)
+    gerenciados = g.map((x) => x.condominios).filter(Boolean)
       .sort((a, b) => a.nome_fantasia.localeCompare(b.nome_fantasia));
   }
+  if (state.user !== usuario) return false;
   const salvo = ler('st_cond');
-  state.condId = state.gerenciados.some((c) => c.id === salvo) ? salvo : state.gerenciados[0]?.id || null;
+  const condId = gerenciados.some((c) => c.id === salvo) ? salvo : gerenciados[0]?.id || null;
+  Object.assign(state, { perfil, unidades, gerenciados, condId });
+  return true;
 }
 
 function rotaPadrao() {
@@ -134,7 +140,8 @@ function montarLayout() {
   });
   document.getElementById('btn-sair').onclick = async (e) => {
     e.preventDefault();
-    await sb.auth.signOut();
+    const { error } = await sb.auth.signOut();
+    if (error) toast('Não foi possível sair. Tente novamente.', 'erro');
   };
   const sel = document.getElementById('sel-cond');
   if (sel) {
@@ -148,9 +155,9 @@ function montarLayout() {
 }
 
 export async function rotear() {
-  if (!state.user) return;
+  if (!state.user || !state.perfil || !document.getElementById('conteudo')) return;
   let rota = location.hash.replace(/^#\/?/, '').split('?')[0];
-  const def = ROTAS[rota];
+  const def = Object.hasOwn(ROTAS, rota) ? ROTAS[rota] : null;
   if (!def || (def.admin && !ehAdmin()) || (def.gestor && !ehGestor())) {
     rota = rotaPadrao();
     if (location.hash !== '#/' + rota) { location.hash = '#/' + rota; return; }
@@ -183,7 +190,7 @@ export async function rotear() {
 
 /** Recarrega dados do usuário e redesenha o menu (após cadastrar condomínio, etc.) */
 export async function recarregar() {
-  await carregarContexto();
+  if (!(await carregarContexto())) return;
   montarLayout();
   await rotear();
 }
@@ -191,8 +198,9 @@ export async function recarregar() {
 async function entrou(user) {
   state.user = user;
   try {
-    await carregarContexto();
+    if (!(await carregarContexto())) return;
   } catch (e) {
+    if (state.user !== user) return;
     app.innerHTML = `<div class="centro"><div class="card erro">Erro ao carregar seus dados. Confira se o arquivo <b>supabase/schema.sql</b> foi executado no Supabase.<br><small>${esc(e.message)}</small></div></div>`;
     return;
   }
@@ -214,7 +222,11 @@ async function iniciar() {
       return telaNovaSenha(app);
     }
     if (evento === 'SIGNED_OUT') {
-      state.user = null;
+      recuperandoSenha = false;
+      Object.assign(state, { user: null, perfil: null, unidades: [], gerenciados: [], condId: null });
+      document.querySelectorAll('.modal-fundo, #toasts').forEach((elemento) => elemento.remove());
+      document.body.classList.remove('menu-aberto');
+      document.title = NOME_APP;
       telaLogin(app);
     }
     if (evento === 'SIGNED_IN' && sessao && !recuperandoSenha && state.user?.id !== sessao.user.id) {

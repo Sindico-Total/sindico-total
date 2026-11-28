@@ -128,6 +128,7 @@ function montarLayout() {
         <header class="topo">
           <button id="btn-menu" aria-label="Menu">☰</button>
           <h1 id="titulo"></h1>
+          <button type="button" class="btn mini-btn" id="btn-atualizar">Atualizar</button>
         </header>
         <main id="conteudo"></main>
       </div>
@@ -138,6 +139,7 @@ function montarLayout() {
   document.getElementById('menu').addEventListener('click', (e) => {
     if (e.target.closest('a')) document.body.classList.remove('menu-aberto');
   });
+  document.getElementById('btn-atualizar').onclick = atualizarPortal;
   document.getElementById('btn-sair').onclick = async (e) => {
     e.preventDefault();
     const { error } = await sb.auth.signOut();
@@ -152,6 +154,49 @@ function montarLayout() {
       else rotear();
     };
   }
+}
+
+async function atualizarPortal(e) {
+  const botao = e.currentTarget;
+  botao.disabled = true;
+  botao.textContent = 'Atualizando…';
+  try {
+    // O parâmetro mantém a verificação fora do cache offline do aplicativo.
+    const url = new URL(location.pathname, location.origin);
+    url.searchParams.set('verificar-atualizacao', Date.now());
+    const resposta = await fetch(url, { cache: 'no-store' });
+    if (!resposta.ok) throw new Error('Portal indisponível');
+
+    const registro = await navigator.serviceWorker?.getRegistration();
+    if (registro) {
+      await registro.update();
+      const worker = registro.installing || registro.waiting;
+      if (worker) await aguardarAtivacao(worker);
+    }
+    location.reload();
+  } catch {
+    toast('Não foi possível atualizar agora. Verifique sua conexão e tente novamente.', 'erro');
+    botao.disabled = false;
+    botao.textContent = 'Atualizar';
+  }
+}
+
+function aguardarAtivacao(worker) {
+  return new Promise((resolve, reject) => {
+    const encerrar = (erro) => {
+      clearTimeout(limite);
+      worker.removeEventListener('statechange', conferir);
+      if (erro) reject(erro);
+      else resolve();
+    };
+    const conferir = () => {
+      if (worker.state === 'activated') encerrar();
+      if (worker.state === 'redundant') encerrar(new Error('Atualização indisponível'));
+    };
+    const limite = setTimeout(() => encerrar(new Error('A atualização demorou demais')), 10000);
+    worker.addEventListener('statechange', conferir);
+    conferir();
+  });
 }
 
 export async function rotear() {
@@ -250,5 +295,5 @@ iniciar().catch((e) => {
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {}));
 }

@@ -1,6 +1,6 @@
 // Service worker: permite instalar o app no celular e abrir a "casca" offline.
 // Estratégia "rede primeiro": sempre busca a versão nova; usa o cache só sem internet.
-const CACHE = 'sindico-total-v3';
+const CACHE = 'sindico-total-v4';
 const CASCA = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/install.js', 'js/config.js', 'js/supabase.js', 'js/ui.js', 'js/pix.js',
@@ -8,7 +8,7 @@ const CASCA = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CASCA)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CASCA.map((arquivo) => new Request(arquivo, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -26,7 +26,7 @@ self.addEventListener('fetch', (e) => {
 
   // Cache apenas a casca estática. Retornos de autenticação com parâmetros
   // e chamadas ao Supabase seguem diretamente para a rede.
-  e.respondWith(fetch(request).catch(async () => {
+  e.respondWith(fetch(request, { cache: 'no-cache' }).catch(async () => {
     const cache = await caches.open(CACHE);
     const resposta = await cache.match(request);
     if (resposta) return resposta;

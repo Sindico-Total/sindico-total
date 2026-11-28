@@ -1,4 +1,4 @@
-import { sb, configurado } from './supabase.js';
+import { sb, configurado, retornoSenha, erroRetornoAuth } from './supabase.js';
 import { NOME_APP } from './config.js';
 import { esc, q, toast, guardar, ler } from './ui.js';
 import { telaLogin, telaNovaSenha, telaConfig } from './views/auth.js';
@@ -36,7 +36,7 @@ const ROTAS = {
   'gestao/condominio':   { tela: gestao.condominio,   titulo: 'Dados do condomínio',  gestor: true },
   'admin/carteira':      { tela: admin.carteira,      titulo: 'Carteira de garantia', admin: true },
   'admin/condominios':   { tela: admin.condominios,   titulo: 'Condomínios',          admin: true },
-  'admin/usuarios':      { tela: admin.usuarios,      titulo: 'Usuários',             admin: true },
+  'admin/usuarios':      { tela: admin.usuarios,      titulo: 'Contas',             admin: true },
 };
 
 const app = document.getElementById('app');
@@ -107,7 +107,7 @@ function montarLayout() {
     ? `<div class="menu-grupo"><small>Fintech (garantidora)</small>
         ${link('admin/carteira', 'Carteira de garantia', '🏦')}
         ${link('admin/condominios', 'Condomínios', '🏢')}
-        ${link('admin/usuarios', 'Usuários', '👥')}
+        ${link('admin/usuarios', 'Contas', '👥')}
       </div>`
     : '';
 
@@ -250,7 +250,7 @@ async function entrou(user) {
     return;
   }
   if (!state.perfil) {
-    app.innerHTML = `<div class="centro"><div class="card erro">Sua conta existe, mas o perfil não foi criado. Rode o <b>schema.sql</b> no Supabase <i>antes</i> de criar contas e cadastre-se novamente.</div></div>`;
+    app.innerHTML = `<div class="centro"><div class="card erro">O perfil da sua conta está indisponível. Procure o administrador do portal.</div></div>`;
     return;
   }
   montarLayout();
@@ -260,31 +260,71 @@ async function entrou(user) {
 async function iniciar() {
   if (!configurado) return telaConfig(app);
 
-  let recuperandoSenha = false;
-  sb.auth.onAuthStateChange((evento, sessao) => {
-    if (evento === 'PASSWORD_RECOVERY') {
-      recuperandoSenha = true;
-      return telaNovaSenha(app);
+  let fluxoSenha = null;
+  let ultimoUsuario = null;
+  const mostrarSenha = (tipo) => {
+    fluxoSenha = tipo;
+    telaNovaSenha(app, tipo, async (salvou) => {
+      const { error } = await sb.auth.signOut();
+      if (error) {
+        toast(salvou ? 'Senha salva. Use Voltar para entrar para encerrar a sessão.'
+          : 'Não foi possível encerrar a sessão. Tente novamente.', 'erro');
+        return;
+      }
+      if (salvou) toast('Senha salva. Entre com a nova senha.');
+    });
+  };
+
+  async function abrirSessao(usuario) {
+    if (fluxoSenha || ultimoUsuario === usuario.id) return;
+    ultimoUsuario = usuario.id;
+    const { data: precisaSenha, error } = await sb.rpc('conta_precisa_definir_senha');
+    if (ultimoUsuario !== usuario.id) return;
+    if (error) {
+      ultimoUsuario = null;
+      telaLogin(app);
+      return toast('Não foi possível verificar sua conta. Tente entrar novamente.', 'erro');
     }
+    if (precisaSenha) return mostrarSenha('invite');
+    await entrou(usuario);
+  }
+
+  if (retornoSenha) {
+    const { tipo, access_token, refresh_token } = retornoSenha;
+    history.replaceState(null, '', location.pathname);
+    if (access_token && refresh_token) {
+      const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
+      if (!error && data.session) mostrarSenha(tipo);
+    }
+  }
+  if (erroRetornoAuth) history.replaceState(null, '', location.pathname);
+
+  sb.auth.onAuthStateChange((evento, sessao) => {
+    if (evento === 'PASSWORD_RECOVERY') return mostrarSenha('recovery');
     if (evento === 'SIGNED_OUT') {
-      recuperandoSenha = false;
+      fluxoSenha = null;
+      ultimoUsuario = null;
       Object.assign(state, { user: null, perfil: null, unidades: [], gerenciados: [], condId: null });
       document.querySelectorAll('.modal-fundo, #toasts').forEach((elemento) => elemento.remove());
       document.body.classList.remove('menu-aberto');
       document.title = NOME_APP;
       telaLogin(app);
     }
-    if (evento === 'SIGNED_IN' && sessao && !recuperandoSenha && state.user?.id !== sessao.user.id) {
-      // setTimeout evita travar o cliente do Supabase dentro do callback
-      setTimeout(() => entrou(sessao.user), 0);
+    if (evento === 'SIGNED_IN' && sessao && !fluxoSenha) {
+      setTimeout(() => abrirSessao(sessao.user).catch(() => telaLogin(app)), 0);
     }
   });
 
-  const { data } = await sb.auth.getSession();
-  if (data.session && !recuperandoSenha) {
-    if (!state.user) await entrou(data.session.user);
-  } else if (!recuperandoSenha) {
-    telaLogin(app);
+  if (!fluxoSenha) {
+    const { data } = await sb.auth.getSession();
+    if ((retornoSenha || erroRetornoAuth) && !data.session) {
+      telaLogin(app, 'recuperar');
+      toast('Este link expirou ou já foi usado. Solicite um novo link.', 'erro');
+    } else if (data.session) {
+      await abrirSessao(data.session.user);
+    } else {
+      telaLogin(app);
+    }
   }
   window.addEventListener('hashchange', rotear);
 }

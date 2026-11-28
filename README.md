@@ -36,7 +36,7 @@ Em **Authentication → URL Configuration**:
 - **Site URL**: `https://SEU-USUARIO.github.io/sindico-total/`
 - **Redirect URLs**: adicione o mesmo endereço.
 
-Em **Authentication → Sign In / Providers → Email**: mantenha **Confirm email** ligado. O acesso por convite depende da confirmação do endereço. Configure um SMTP em **Authentication → Emails → SMTP** para entregar mensagens de cadastro e recuperação em produção.
+Em **Authentication → Sign In / Providers → Email**: mantenha **Confirm email** ligado. O acesso por convite depende da confirmação do endereço. Configure o envio transacional por SMTP próprio ou pela API descrita em **Envio de e-mail por API, sem SMTP** para entregar convites e redefinições a moradores. O remetente padrão do Supabase só atende endereços autorizados do time. Confira se a URL publicada está na lista de redirecionamento e mantenha `{{ .ConfirmationURL }}` nos modelos de convite e recuperação.
 
 ### 4) Ligar o app ao seu Supabase
 1. No Supabase: **Project Settings → API** (ou botão **Connect**). Copie a **Project URL** e a chave **anon / publishable**.
@@ -53,7 +53,7 @@ Em **Authentication → Sign In / Providers → Email**: mantenha **Confirm emai
 Em 1–2 minutos o app estará em `https://SEU-USUARIO.github.io/sindico-total/`.
 
 ### 6) Primeiro uso
-1. Abra o app, crie a conta da fintech e confirme o e-mail. Todo cadastro começa como **Morador**. Para habilitar o primeiro administrador, use o **SQL Editor** do Supabase com o UUID da conta confirmada em **Authentication → Users**.
+1. Em uma instalação nova, crie a conta da fintech em **Authentication → Users** e verifique o endereço. No **SQL Editor**, use o UUID dessa conta para designar o administrador principal. Em um banco existente, a migração designa a primeira conta administrativa confirmada.
    ```sql
    update public.pessoas p
    set tipo_usuario = 'ADMINISTRADOR'
@@ -61,13 +61,56 @@ Em 1–2 minutos o app estará em `https://SEU-USUARIO.github.io/sindico-total/`
    where a.id = p.id
      and a.email_confirmed_at is not null
      and a.id = 'UUID-DA-CONTA-CONFIRMADA';
+
+   insert into private.contas_config (principal_id)
+   select id from public.pessoas
+   where id = 'UUID-DA-CONTA-CONFIRMADA' and tipo_usuario = 'ADMINISTRADOR';
    ```
 2. **Condomínios** → cadastre o primeiro condomínio → **+ Síndico** → vincule você mesmo (ou o síndico).
 3. Como administrador, preencha a **chave Pix** e o titular em **Dados do condomínio**. O síndico pode cadastrar o WhatsApp de atendimento e editar os demais dados operacionais.
 4. **Unidades** → cadastre ou **importe a planilha** (baixe o modelo no próprio app). A coluna de e-mail já convida os moradores.
 5. **Faturamento** → **Gerar faturas do mês**.
-6. Os moradores criam conta com o **mesmo e-mail** do convite e acessam as faturas após confirmar o endereço.
-7. Para outro síndico: ele cria conta → em **Usuários** mude para "Síndico profissional" → em **Condomínios** clique **+ Síndico**.
+6. Os moradores usam **Solicitar acesso** com o mesmo e-mail do vínculo de unidade. Em **Contas**, um administrador aprova o pedido. O morador segue o convite por e-mail, cria a senha e entra no portal.
+7. Para outro síndico, aprove a solicitação, altere o perfil para **Síndico profissional** em **Contas** e vincule-o ao condomínio.
+8. Publique a função `aprovar-acesso` no Supabase. Ela verifica o token com o Auth e confirma o papel do operador antes de enviar o convite. Use `PORTAL_URL` como segredo de configuração se estiver publicando em outro endereço.
+   ```bash
+   npx supabase functions deploy aprovar-acesso --no-verify-jwt
+   ```
+
+#### Envio sem domínio próprio
+
+Para começar com baixo volume, use uma conta Gmail dedicada ao portal. Ative a verificação em duas etapas nessa conta e gere uma [senha de app do Google](https://support.google.com/accounts/answer/185833?hl=pt-BR).
+
+Em **Authentication → Emails → SMTP** do Supabase, configure os campos abaixo. Se já houver um provedor em uso, verifique se ele envia para destinatários externos antes de substituí-lo.
+
+| Campo | Valor |
+| --- | --- |
+| Remetente e usuário SMTP | O endereço Gmail dedicado, completo |
+| Nome do remetente | Síndico Total |
+| Host | `smtp.gmail.com` |
+| Porta | `587` (STARTTLS) |
+| Senha | A senha de app, inserida diretamente no painel do Supabase |
+
+Verifique a entrega com um endereço de teste fora da equipe do Supabase antes de publicar o novo fluxo. Guarde a senha de app no painel do Supabase. [Configuração do Gmail no Supabase](https://supabase.com/kb/troubleshooting/using-google-smtp-with-supabase-custom-smtp-ZZzU4Y).
+
+#### Envio de e-mail por API, sem SMTP
+
+O Supabase Auth também pode enviar convites e links de recuperação pela API do Resend. Essa opção exige um domínio verificado no Resend e uma chave com permissão de envio. Guarde a chave somente nos segredos das Edge Functions do Supabase.
+
+1. Nas configurações de segredos do Supabase, defina `RESEND_API_KEY` e `AUTH_EMAIL_FROM` (por exemplo, `Síndico Total <acesso@dominio-verificado>`).
+2. Publique `enviar-email-auth` com `supabase functions deploy enviar-email-auth --no-verify-jwt`. A função exige a assinatura do Auth Hook em todas as requisições.
+3. Em **Authentication → Auth Hooks → Send Email**, escolha HTTPS, informe a URL da função e gere um segredo. Salve o valor em `SEND_EMAIL_HOOK_SECRET` nos segredos das Edge Functions e habilite o hook.
+4. Mantenha o provedor de e-mail habilitado no Supabase e teste um convite e uma recuperação em um endereço próprio antes de abrir o acesso aos moradores.
+
+A opção por SMTP usa os mesmos formulários. Use **SMTP próprio ou Auth Hook** conforme o provedor escolhido. [Send Email Hook do Supabase](https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook) · [Domínios verificados no Resend](https://resend.com/docs/dashboard/domains/introduction).
+
+#### Gestão de contas
+
+- A área **Contas** mostra pedidos pendentes, aprovados e recusados. A aprovação envia um convite pelo Auth. Um convite pendente de aceitação pode ser reenviado.
+- O administrador principal pode excluir outras contas. A exclusão revoga o acesso, remove os vínculos e preserva pagamentos, despesas e diligências. Contas proprietárias de comprovantes precisam ter a propriedade dos arquivos transferida antes da exclusão.
+- O pedido público coleta nome, e-mail e, opcionalmente, uma referência de condomínio ou unidade. A recuperação de senha usa uma resposta genérica para evitar revelar se há uma conta para o endereço informado.
+
+O fluxo de decisão segue a fila de aprovação do [Microsoft Entra](https://learn.microsoft.com/en-us/entra/id-governance/entitlement-management-request-approve). A emissão do convite a um endereço verificável segue o [GitHub Organizations](https://docs.github.com/pt/organizations/managing-membership-in-your-organization/inviting-users-to-join-your-organization). A recuperação usa as orientações do [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
 
 ### 7) Instalar no celular
 - **Android (Chrome):** abra o endereço → menu ⋮ → **Instalar app** / **Adicionar à tela inicial**.

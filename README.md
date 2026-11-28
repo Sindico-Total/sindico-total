@@ -36,7 +36,7 @@ Em **Authentication → URL Configuration**:
 - **Site URL**: `https://SEU-USUARIO.github.io/sindico-total/`
 - **Redirect URLs**: adicione o mesmo endereço.
 
-Em **Authentication → Sign In / Providers → Email**: mantenha **Confirm email** ligado. O acesso por convite depende da confirmação do endereço. Configure um SMTP próprio em **Authentication → Emails → SMTP** para entregar convites e redefinições a moradores. O remetente padrão do Supabase só atende endereços autorizados do time. Confira se a URL publicada está na lista de redirecionamento e mantenha `{{ .ConfirmationURL }}` nos modelos de convite e recuperação.
+Em **Authentication → Sign In / Providers → Email**: mantenha **Confirm email** ligado. O acesso por convite depende da confirmação do endereço. Configure o envio transacional por SMTP próprio ou pela API descrita em **Envio de e-mail por API, sem SMTP** para entregar convites e redefinições a moradores. O remetente padrão do Supabase só atende endereços autorizados do time. Confira se a URL publicada está na lista de redirecionamento e mantenha `{{ .ConfirmationURL }}` nos modelos de convite e recuperação.
 
 ### 4) Ligar o app ao seu Supabase
 1. No Supabase: **Project Settings → API** (ou botão **Connect**). Copie a **Project URL** e a chave **anon / publishable**.

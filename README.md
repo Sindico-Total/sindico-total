@@ -77,6 +77,17 @@ Em 1–2 minutos o app estará em `https://SEU-USUARIO.github.io/sindico-total/`
    npx supabase functions deploy aprovar-acesso --no-verify-jwt
    ```
 
+#### Envio de e-mail por API, sem SMTP
+
+O Supabase Auth também pode enviar convites e links de recuperação pela API do Resend. Essa opção exige um domínio verificado no Resend e uma chave com permissão de envio. Guarde a chave somente nos segredos das Edge Functions do Supabase.
+
+1. Nas configurações de segredos do Supabase, defina `RESEND_API_KEY` e `AUTH_EMAIL_FROM` (por exemplo, `Síndico Total <acesso@dominio-verificado>`).
+2. Publique `enviar-email-auth` com `supabase functions deploy enviar-email-auth --no-verify-jwt`. A função exige a assinatura do Auth Hook em todas as requisições.
+3. Em **Authentication → Auth Hooks → Send Email**, escolha HTTPS, informe a URL da função e gere um segredo. Salve o valor em `SEND_EMAIL_HOOK_SECRET` nos segredos das Edge Functions e habilite o hook.
+4. Mantenha o provedor de e-mail habilitado no Supabase e teste um convite e uma recuperação em um endereço próprio antes de abrir o acesso aos moradores.
+
+A opção por SMTP usa os mesmos formulários. Use **SMTP próprio ou Auth Hook** conforme o provedor escolhido. [Send Email Hook do Supabase](https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook) · [Domínios verificados no Resend](https://resend.com/docs/dashboard/domains/introduction).
+
 #### Gestão de contas
 
 - A área **Contas** mostra pedidos pendentes, aprovados e recusados. A aprovação envia um convite pelo Auth. Um convite pendente de aceitação pode ser reenviado.

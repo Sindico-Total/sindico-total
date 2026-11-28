@@ -15,7 +15,7 @@ const fimDoMes = (ym) => {
 export async function painel(root) {
   const c = condAtual();
   const ym = mesAtual();
-  await sb.rpc('atualizar_atrasos');
+  await q(sb.rpc('atualizar_atrasos'));
   const [fat, sols, vist, unid] = await Promise.all([
     q(sb.from('faturas').select('valor_original,status,mes_referencia').eq('condominio_id', c.id).eq('mes_referencia', ym + '-01')),
     q(sb.from('solicitacoes').select('id,titulo,status,criado_em').eq('condominio_id', c.id).in('status', ['ABERTA', 'EM_ANDAMENTO']).order('criado_em')),
@@ -63,7 +63,7 @@ export async function painel(root) {
 export async function faturas(root) {
   const c = condAtual();
   const ym = root.dataset.mes || mesAtual();
-  await sb.rpc('atualizar_atrasos');
+  await q(sb.rpc('atualizar_atrasos'));
   const [lista, vinc] = await Promise.all([
     q(sb.from('faturas').select('*, unidades(identificacao)').eq('condominio_id', c.id).eq('mes_referencia', ym + '-01')),
     q(sb.from('vinculos_unidade').select('unidade_id, tipo_vinculo, pessoas(nome_completo, telefone_whatsapp), unidades!inner(condominio_id)')
@@ -249,7 +249,7 @@ export async function unidades(root) {
       const email = (l[3] || '').trim();
       const u = salvas.find((s) => s.identificacao === l[0]);
       if (email && u) {
-        await sb.rpc('convidar_morador', { p_unidade: u.id, p_email: email, p_tipo: 'PROPRIETARIO' });
+        await q(sb.rpc('convidar_morador', { p_unidade: u.id, p_email: email, p_tipo: 'PROPRIETARIO' }));
         convites++;
       }
     }
@@ -335,7 +335,7 @@ export async function despesas(root) {
         <label>Competência<input type="date" name="data_competencia" required value="${ym === mesAtual() ? hojeISO() : ym + '-01'}"></label>
         <label>Pago em<input type="date" name="data_pagamento"></label>
       </div>
-      <label>Comprovante / nota fiscal (foto ou PDF)<input type="file" name="arquivo" accept="image/*,application/pdf"></label>
+      <label>Comprovante / nota fiscal (foto ou PDF)<input type="file" name="arquivo" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
       <button class="btn primario">Salvar despesa</button>
     </form>
     <div class="card filtros">
@@ -530,8 +530,8 @@ export async function condominio(root) {
         <label>CNPJ<input name="cnpj" value="${esc(c.cnpj)}" ${ehAdmin() ? '' : 'disabled'}></label>
         <label>Endereço<input name="endereco_completo" value="${esc(c.endereco_completo || '')}"></label>
         <label>Cidade (vai no Pix)<input name="cidade" maxlength="60" value="${esc(c.cidade || '')}"></label>
-        <label>Chave Pix que recebe as taxas<input name="chave_pix" value="${esc(c.chave_pix || '')}" placeholder="CNPJ, e-mail, telefone ou chave aleatória"></label>
-        <label>Nome do titular da chave (até 25 letras)<input name="nome_recebedor_pix" maxlength="25" value="${esc(c.nome_recebedor_pix || '')}"></label>
+        <label>Chave Pix que recebe as taxas<input name="chave_pix" value="${esc(c.chave_pix || '')}" placeholder="CNPJ, e-mail, telefone ou chave aleatória" ${ehAdmin() ? '' : 'readonly'}></label>
+        <label>Nome do titular da chave (até 25 letras)<input name="nome_recebedor_pix" maxlength="25" value="${esc(c.nome_recebedor_pix || '')}" ${ehAdmin() ? '' : 'readonly'}></label>
         <label>WhatsApp do síndico<input name="whatsapp_sindico" inputmode="tel" value="${esc(c.whatsapp_sindico || '')}" placeholder="11999999999"></label>
         <label>Dia de vencimento<input type="number" min="1" max="28" name="dia_vencimento" value="${c.dia_vencimento || 10}"></label>
         ${ehAdmin() ? `<label>Taxa de garantia / deságio (%)<input name="taxa" inputmode="decimal" value="${String(c.taxa_garantia_percentual ?? '').replace('.', ',')}"></label>
@@ -545,10 +545,11 @@ export async function condominio(root) {
     const f = dadosForm(e.target);
     const dados = {
       nome_fantasia: f.nome_fantasia.trim(), endereco_completo: f.endereco_completo || null, cidade: f.cidade || null,
-      chave_pix: f.chave_pix.trim() || null, nome_recebedor_pix: f.nome_recebedor_pix || null,
       whatsapp_sindico: soDigitos(f.whatsapp_sindico) || null, dia_vencimento: Number(f.dia_vencimento) || 10,
     };
     if (ehAdmin()) {
+      dados.chave_pix = f.chave_pix.trim() || null;
+      dados.nome_recebedor_pix = f.nome_recebedor_pix || null;
       dados.cnpj = soDigitos(f.cnpj);
       dados.taxa_garantia_percentual = numBR(f.taxa);
       dados.status_assinatura = f.status_assinatura;

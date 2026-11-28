@@ -29,14 +29,14 @@ Funciona no navegador e pode ser **instalado no celular** como app (PWA), sem lo
 ### 2) Criar o banco de dados no Supabase
 1. Crie uma conta em <https://supabase.com> (pode entrar com o próprio GitHub) → **New project**.
    - Região: **South America (São Paulo)**. Anote a senha do banco.
-2. No menu do projeto: **SQL Editor → New query** → abra o arquivo `supabase/schema.sql`, copie **tudo**, cole e clique **Run**. Deve aparecer *Success*.
+2. No menu do projeto: **SQL Editor → New query** → abra o arquivo `supabase/schema.sql`, copie **tudo**, cole e clique **Run**. Em outra consulta, execute cada arquivo de `supabase/migrations/` em ordem de nome. Para um banco existente, aplique somente as migrações ainda pendentes.
 
 ### 3) Configurar o login
 Em **Authentication → URL Configuration**:
 - **Site URL**: `https://SEU-USUARIO.github.io/sindico-total/`
 - **Redirect URLs**: adicione o mesmo endereço.
 
-Em **Authentication → Sign In / Providers → Email**: para os primeiros testes você pode **desligar "Confirm email"** (o envio de e-mails do plano grátis tem limite bem baixo por hora). Para produção, ligue de novo e configure um SMTP gratuito (Brevo, Resend etc.) em **Authentication → Emails → SMTP**.
+Em **Authentication → Sign In / Providers → Email**: mantenha **Confirm email** ligado. O acesso por convite depende da confirmação do endereço. Configure um SMTP em **Authentication → Emails → SMTP** para entregar mensagens de cadastro e recuperação em produção.
 
 ### 4) Ligar o app ao seu Supabase
 1. No Supabase: **Project Settings → API** (ou botão **Connect**). Copie a **Project URL** e a chave **anon / publishable**.
@@ -53,12 +53,20 @@ Em **Authentication → Sign In / Providers → Email**: para os primeiros teste
 Em 1–2 minutos o app estará em `https://SEU-USUARIO.github.io/sindico-total/`.
 
 ### 6) Primeiro uso
-1. Abra o app → **Criar conta**. **A primeira conta criada vira ADMINISTRADOR** (a fintech). As seguintes entram como Morador.
+1. Abra o app, crie a conta da fintech e confirme o e-mail. Todo cadastro começa como **Morador**. Para habilitar o primeiro administrador, use o **SQL Editor** do Supabase com o UUID da conta confirmada em **Authentication → Users**.
+   ```sql
+   update public.pessoas p
+   set tipo_usuario = 'ADMINISTRADOR'
+   from auth.users a
+   where a.id = p.id
+     and a.email_confirmed_at is not null
+     and a.id = 'UUID-DA-CONTA-CONFIRMADA';
+   ```
 2. **Condomínios** → cadastre o primeiro condomínio → **+ Síndico** → vincule você mesmo (ou o síndico).
-3. **Dados do condomínio** → preencha a **chave Pix** que recebe as taxas, nome do titular e WhatsApp do síndico.
+3. Como administrador, preencha a **chave Pix** e o titular em **Dados do condomínio**. O síndico pode cadastrar o WhatsApp de atendimento e editar os demais dados operacionais.
 4. **Unidades** → cadastre ou **importe a planilha** (baixe o modelo no próprio app). A coluna de e-mail já convida os moradores.
 5. **Faturamento** → **Gerar faturas do mês**.
-6. Os moradores criam conta com o **mesmo e-mail** do convite e já veem suas faturas.
+6. Os moradores criam conta com o **mesmo e-mail** do convite e acessam as faturas após confirmar o endereço.
 7. Para outro síndico: ele cria conta → em **Usuários** mude para "Síndico profissional" → em **Condomínios** clique **+ Síndico**.
 
 ### 7) Instalar no celular
@@ -68,7 +76,8 @@ Em 1–2 minutos o app estará em `https://SEU-USUARIO.github.io/sindico-total/`
 ### 8) (Opcional) Síndico de Bolso no WhatsApp
 O app já usa o WhatsApp **de graça** por links `wa.me` (cobrar morador, falar com o síndico, enviar comprovante). O robô automático usa a **WhatsApp Cloud API** da Meta, que **tem custo**: desde 1º/out/2026 a Meta passou a cobrar por mensagem também as respostas dentro da janela de 24h (há uma faixa mensal gratuita de mensagens de serviço — confira a tabela atual da Meta antes de ativar).
 
-Para ativar:
+Para ativar, use contas com telefone verificado pelo Supabase Auth e teste a integração em um ambiente separado. A função exige assinatura da Meta e valida o ID do número destinatário.
+
 1. Em <https://developers.facebook.com> crie um app do tipo *Business* → adicione **WhatsApp** → anote *Phone number ID* e gere um *token permanente* (usuário do sistema).
 2. Instale o Supabase CLI e publique a função:
    ```bash
@@ -80,7 +89,7 @@ Para ativar:
 3. Na Meta, em **WhatsApp → Configuration → Webhook**: URL `https://SEU_PROJECT_REF.supabase.co/functions/v1/whatsapp-bot`, *verify token* = o mesmo `WHATSAPP_VERIFY_TOKEN`; assine o campo **messages**.
 4. (Opcional) IA: crie uma chave grátis no **Google AI Studio** e rode `npx supabase secrets set GEMINI_API_KEY=...`. Sem ela, o robô funciona por palavras-chave. Atenção LGPD: no nível gratuito o Google pode usar o conteúdo enviado para melhorar seus produtos — a função envia **só o texto da mensagem**, nunca CPF ou dados de cadastro.
 
-O morador precisa ter o WhatsApp cadastrado em **Meu perfil**. Comandos: `1` faturas/Pix · `2` ou descrever um problema → vira diligência · `3` vistorias.
+O telefone de contato preenchido em **Meu perfil** é usado para comunicação. O robô só vincula o remetente à conta pelo número confirmado no Auth. Comandos: `1` consulta faturas/Pix, `2 descrição` abre uma diligência para quem tem uma única unidade e `3` lista vistorias.
 
 ### 9) Manter o Supabase grátis ativo
 O plano grátis **pausa o projeto após 1 semana sem uso**. Com o app em uso isso não acontece. Para garantir, o robô `.github/workflows/manter-supabase-ativo.yml` faz uma consulta a cada 3 dias: em **Settings → Secrets and variables → Actions** crie os segredos `SUPABASE_URL` e `SUPABASE_ANON_KEY`.
@@ -94,7 +103,7 @@ O plano grátis também **não tem backup automático**: exporte os dados period
 |---|---|---|
 | GitHub Pages | Hospeda o app | Repositório público; uso pessoal/MVP |
 | Supabase Free | Banco, login, arquivos | 500 MB de banco, 1 GB de arquivos, 2 projetos, pausa após 1 semana parado |
-| Pix Copia e Cola | Recebimento | Grátis (código gerado no app); a baixa é manual |
+| Pix Copia e Cola | Recebimento | Grátis (código gerado no app); a baixa é manual e exige o valor integral |
 | WhatsApp `wa.me` | Cobrança/contato | Grátis (o síndico envia pelo próprio WhatsApp) |
 | WhatsApp Cloud API + Gemini | Robô (opcional) | Pago por mensagem na Meta; Gemini com cota grátis |
 

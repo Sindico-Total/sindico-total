@@ -1,8 +1,7 @@
 -- =====================================================================
 --  SÍNDICO TOTAL — Banco de dados (PostgreSQL / Supabase)
---  Como usar: Supabase > SQL Editor > New query > cole TUDO > Run.
---  Pode ser executado de novo sem apagar dados (é idempotente na
---  maior parte); para recomeçar do zero use supabase/reset.sql antes.
+--  Base para um projeto novo. Depois, aplique supabase/migrations/
+--  na ordem indicada no README, antes de abrir o cadastro.
 -- =====================================================================
 
 create extension if not exists pgcrypto;
@@ -261,19 +260,14 @@ $$;
 
 -- =====================================================================
 --  CADASTRO AUTOMÁTICO AO CRIAR CONTA
---  * O PRIMEIRO usuário do sistema vira ADMINISTRADOR (a fintech).
---  * Os demais entram como MORADOR e recebem os convites pendentes.
+--  * Todo cadastro público começa como MORADOR.
+--  * A migração vincula convites quando o Auth confirma o e-mail.
 -- =====================================================================
 create or replace function public.ao_criar_usuario() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
-  v_tipo text := 'MORADOR';
   v_cpf  text := nullif(regexp_replace(coalesce(new.raw_user_meta_data->>'cpf_cnpj',''), '\D', '', 'g'), '');
 begin
-  if not exists (select 1 from pessoas) then
-    v_tipo := 'ADMINISTRADOR';
-  end if;
-
   insert into pessoas (id, nome_completo, cpf_cnpj, email, telefone_whatsapp, tipo_usuario)
   values (
     new.id,
@@ -281,17 +275,8 @@ begin
     v_cpf,
     lower(new.email),
     nullif(regexp_replace(coalesce(new.raw_user_meta_data->>'telefone_whatsapp',''), '\D', '', 'g'), ''),
-    v_tipo)
+    'MORADOR')
   on conflict (id) do nothing;
-
-  insert into vinculos_unidade (unidade_id, pessoa_id, tipo_vinculo)
-  select c.unidade_id, new.id, c.tipo_vinculo
-    from convites c
-   where lower(c.email) = lower(new.email) and c.usado_em is null
-  on conflict do nothing;
-
-  update convites set usado_em = now()
-   where lower(email) = lower(new.email) and usado_em is null;
 
   return new;
 end $$;
@@ -603,4 +588,4 @@ create policy comp_insert on storage.objects for insert to authenticated
 create policy comp_delete on storage.objects for delete to authenticated
   using (bucket_id = 'comprovantes' and public.gerencia(((storage.foldername(name))[1])::uuid));
 
--- Fim. Próximo passo: crie sua conta no app — o primeiro cadastro vira ADMINISTRADOR.
+-- Fim da base. Aplique as migrações antes de cadastrar usuários.

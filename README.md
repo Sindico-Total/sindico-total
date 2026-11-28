@@ -77,6 +77,22 @@ Em 1–2 minutos o app estará em `https://SEU-USUARIO.github.io/sindico-total/`
    npx supabase functions deploy aprovar-acesso --no-verify-jwt
    ```
 
+#### Envio sem domínio próprio
+
+Para começar com baixo volume, use uma conta Gmail dedicada ao portal. Ative a verificação em duas etapas nessa conta e gere uma [senha de app do Google](https://support.google.com/accounts/answer/185833?hl=pt-BR).
+
+Em **Authentication → Emails → SMTP** do Supabase, configure os campos abaixo. Se já houver um provedor em uso, verifique se ele envia para destinatários externos antes de substituí-lo.
+
+| Campo | Valor |
+| --- | --- |
+| Remetente e usuário SMTP | O endereço Gmail dedicado, completo |
+| Nome do remetente | Síndico Total |
+| Host | `smtp.gmail.com` |
+| Porta | `587` (STARTTLS) |
+| Senha | A senha de app, inserida diretamente no painel do Supabase |
+
+Verifique a entrega com um endereço de teste fora da equipe do Supabase antes de publicar o novo fluxo. Guarde a senha de app no painel do Supabase. [Configuração do Gmail no Supabase](https://supabase.com/kb/troubleshooting/using-google-smtp-with-supabase-custom-smtp-ZZzU4Y).
+
 #### Envio de e-mail por API, sem SMTP
 
 O Supabase Auth também pode enviar convites e links de recuperação pela API do Resend. Essa opção exige um domínio verificado no Resend e uma chave com permissão de envio. Guarde a chave somente nos segredos das Edge Functions do Supabase.

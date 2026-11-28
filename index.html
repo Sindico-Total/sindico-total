@@ -2,6 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="referrer" content="strict-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Síndico Total</title>
   <meta name="description" content="Síndico profissional, administração e garantia condominial em um só app.">
@@ -13,7 +15,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="css/style.css">
   <!-- QR Code do Pix (biblioteca gratuita, MIT) -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" integrity="sha384-8FWZA6BGMXhsfO+BLtrJK0We6gg5o1JyO8xQm6peWDEUs17ACA5ziE/NIAkl9z2k" crossorigin="anonymous" defer></script>
 </head>
 <body>
   <div id="app"><div class="centro"><div class="carregando">Carregando…</div></div></div>

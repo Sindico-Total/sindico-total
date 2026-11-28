@@ -1,6 +1,6 @@
 // Service worker: permite instalar o app no celular e abrir a "casca" offline.
 // Estratégia "rede primeiro": sempre busca a versão nova; usa o cache só sem internet.
-const CACHE = 'sindico-total-v2';
+const CACHE = 'sindico-total-v3';
 const CASCA = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/install.js', 'js/config.js', 'js/supabase.js', 'js/ui.js', 'js/pix.js',
@@ -13,21 +13,23 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith('sindico-total-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
+const recursos = new Set(CASCA.map((arquivo) => new URL(arquivo, self.registration.scope).href));
+
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin) return; // Supabase/CDN: direto na rede
-  e.respondWith(
-    fetch(e.request)
-      .then((r) => {
-        const copia = r.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copia));
-        return r;
-      })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('index.html')))
-  );
+  const { request } = e;
+  if (request.method !== 'GET' || !recursos.has(request.url)) return;
+
+  // Cache apenas a casca estática. Retornos de autenticação com parâmetros
+  // e chamadas ao Supabase seguem diretamente para a rede.
+  e.respondWith(fetch(request).catch(async () => {
+    const cache = await caches.open(CACHE);
+    const resposta = await cache.match(request);
+    if (resposta) return resposta;
+    return Response.error();
+  }));
 });
